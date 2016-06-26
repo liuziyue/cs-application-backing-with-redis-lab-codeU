@@ -68,7 +68,7 @@ public class JedisIndex {
 	 */
 	public Set<String> getURLs(String term) {
         // FILL THIS IN!
-		return null;
+        return jedis.smembers(urlSetKey(term));
 	}
 
     /**
@@ -79,7 +79,12 @@ public class JedisIndex {
 	 */
 	public Map<String, Integer> getCounts(String term) {
         // FILL THIS IN!
-		return null;
+		Map<String, String> map = jedis.hgetAll(term);
+		Map<String, Integer> ret = new HashMap<>();
+		for (String k : map.keySet()) {
+			ret.put(k, Integer.parseInt(map.get(k)));
+		}
+		return ret;
 	}
 
     /**
@@ -91,7 +96,7 @@ public class JedisIndex {
 	 */
 	public Integer getCount(String url, String term) {
         // FILL THIS IN!
-		return null;
+		return Integer.parseInt(jedis.hget(termCounterKey(url), term));
 	}
 
 
@@ -103,6 +108,16 @@ public class JedisIndex {
 	 */
 	public void indexPage(String url, Elements paragraphs) {
         // FILL THIS IN!
+		TermCounter tc = new TermCounter(url);
+		tc.processElements(paragraphs);
+		Transaction t = jedis.multi();
+		// jedis.hset(termCounterKey(url), "the", Integer.toString(tc.get("the")));
+		for (String term: tc.keySet()) {
+			t.hset(termCounterKey(url), term, Integer.toString(tc.get(term)));
+			t.hset(term, url, Integer.toString(tc.get(term)));
+			t.sadd(urlSetKey(term), url);
+		}
+		t.exec();
 	}
 
 	/**
@@ -223,9 +238,9 @@ public class JedisIndex {
 		Jedis jedis = JedisMaker.make();
 		JedisIndex index = new JedisIndex(jedis);
 		
-		//index.deleteTermCounters();
-		//index.deleteURLSets();
-		//index.deleteAllKeys();
+		index.deleteTermCounters();
+		index.deleteURLSets();
+		index.deleteAllKeys();
 		loadIndex(index);
 		
 		Map<String, Integer> map = index.getCounts("the");
